@@ -1,0 +1,22 @@
+{
+  "name": "untitled",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server/index.js",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "start": "node server/production.js",
+    "test": "node --test tests/api.test.js"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "mysql2": "^3.24.6"
+  }
+}
