@@ -1,7 +1,9 @@
 """先运行 npm run dev，再执行 python -m unittest discover -s tests -v。
 
 每次生成不同的用户名；成功注册的测试账号保留在数据库，方便练习查库断言。
-设置 HEADLESS=1 可无界面运行，BASE_URL 可覆盖默认网站地址。
+每条用例使用独立标签页，默认在测试结束后保留浏览器，供手动查看。
+设置 KEEP_BROWSER_OPEN=0 可自动关闭；HEADLESS=1 可无界面运行。
+BASE_URL 可覆盖默认网站地址。
 """
 import os
 import json
@@ -35,10 +37,10 @@ class TestRegistration(unittest.TestCase):
                 '请先在项目根目录运行 npm run dev，并保持该终端打开。'
             ) from error
         print('[准备] 网站与数据库连接正常。', flush=True)
-
-    def setUp(self):
-        print(f'\n[运行] {self._testMethodName}', flush=True)
+        cls.keep_browser_open = os.getenv('KEEP_BROWSER_OPEN', '1') == '1' and os.getenv('HEADLESS') != '1'
+        cls.test_tab_count = 0
         options = webdriver.ChromeOptions()
+        options.add_experimental_option('detach', cls.keep_browser_open)
         if os.getenv('HEADLESS') == '1':
             options.add_argument('--headless=new')
         options.add_argument('--window-size=1440,1000')
@@ -61,16 +63,32 @@ class TestRegistration(unittest.TestCase):
             print('[浏览器] 未找到本地驱动，正在联网获取，网络请求超时为 20 秒…', flush=True)
             service = Service()
         try:
-            self.driver = webdriver.Chrome(service=service, options=options)
+            cls.driver = webdriver.Chrome(service=service, options=options)
         except Exception as error:
             raise RuntimeError(
                 'Chrome 启动失败。请确认已安装 Chrome，且 ChromeDriver 与浏览器版本匹配。'
                 '可将驱动放到项目 drivers/chromedriver-win64/chromedriver.exe，'
                 '或用 CHROMEDRIVER_PATH 指定路径。原始错误：' + str(error)
             ) from error
-        self.addCleanup(self.driver.quit)
-        self.driver.set_page_load_timeout(20)
-        print('[浏览器] 已启动，正在打开注册页面。', flush=True)
+        cls.addClassCleanup(cls.finish_browser)
+        cls.driver.set_page_load_timeout(20)
+        print('[浏览器] 已启动；每条测试将使用独立标签页。', flush=True)
+
+    @classmethod
+    def finish_browser(cls):
+        if cls.keep_browser_open:
+            print('\n[完成] 测试页面已保留，可切换标签页查看结果；看完后手动关闭此浏览器。', flush=True)
+            # 不调用 quit()，否则 detach=True 也不能阻止标签页被关闭。
+            # 停止驱动服务，Chrome 通过 detach 选项继续保留。
+            cls.driver.service.stop()
+        else:
+            cls.driver.quit()
+
+    def setUp(self):
+        print(f'\n[运行] {self._testMethodName}', flush=True)
+        if type(self).test_tab_count:
+            self.driver.switch_to.new_window('tab')
+        type(self).test_tab_count += 1
         self.wait = WebDriverWait(self.driver, 15)
         self.driver.get(self.base_url)
         self.wait.until(EC.visibility_of_element_located((By.ID, 'username')))
@@ -157,8 +175,8 @@ class TestRegistration(unittest.TestCase):
         self.driver.find_element(By.ID, 'close-terms').click()
         self.wait.until(EC.invisibility_of_element_located((By.ID, 'terms-dialog')))
 
-    def tearDown(self):
-        time.sleep(2)
+    # def tearDown(self):
+    #     time.sleep(2)
 
 if __name__ == '__main__':
     print('开始运行注册自动化测试；请查看下方进度。', flush=True)
